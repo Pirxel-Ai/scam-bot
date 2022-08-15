@@ -9,14 +9,14 @@ import time
 from src.utils import read_config
 from src.fetch_data import query_datasets
 
-config = read_config('../settings/config.ini')
+config = read_config('settings/config.ini')
 
 # Authenticate to Twitter
-bearer_token = config['PirxBot']['BEARER_TOKEN']
-consumer_key = config['PirxBot']['API_KEY']
-consumer_secret_key = config['PirxBot']['API_SECRET']
-access_token = config['PirxBot']['ACCES_TOKEN']
-access_token_secret = config['PirxBot']['ACCES_TOKEN_SECRET']
+bearer_token = config['FirstBotProd']['BEARER_TOKEN']
+consumer_key = config['FirstBotProd']['API_KEY']
+consumer_secret_key = config['FirstBotProd']['API_SECRET']
+access_token = config['FirstBotProd']['ACCES_TOKEN']
+access_token_secret = config['FirstBotProd']['ACCES_TOKEN_SECRET']
 
 
 auth = tweepy.OAuthHandler(consumer_key, consumer_secret_key)
@@ -33,7 +33,14 @@ except:
     print("Authentication Error")
     
     
-WHITELIST = ['MercadoPagoMex', 'Airbnbdesign', 'bookingdesign', 'SkyscannerNow']
+WHITELIST = ['MercadoPagoMex', 
+            'Airbnbdesign', 
+            'bookingdesign', 
+            'SkyscannerNow',
+            'KotakCares',
+            'FrontierCare',
+            'sterlinghelp',
+            'bobcreditcard']
 
 QUERY = """
         SELECT tweets.*, 
@@ -59,32 +66,7 @@ QUERY = """
         on tweets.author_id = candidates.id_str
         where candidates.id_str is not null
         and candidates.screen_name != candidates.target
-"""
-
-QUERY = """
-        SELECT tweets.*, 
-        candidates.target,
-        candidates.match_type,
-        candidates.id_str,
-        candidates.name,
-        candidates.screen_name,
-        candidates.location,
-        candidates.description,
-        candidates.url,
-        candidates.protected,
-        candidates.followers_count,
-        candidates.friends_count,
-        candidates.listed_count,
-        candidates.created_at as user_created_at,
-        candidates.favourites_count,
-        candidates.verified,
-        candidates.statuses_count,
-        candidates.profile_image_url,
-        FROM `deeplogo.Streaming.tweets` as tweets
-        left join `deeplogo.Fraud.candidates` as candidates
-        on tweets.author_id = candidates.id_str
-        where candidates.id_str is not null
-        and candidates.screen_name != candidates.target
+        and tweets.created_at > DATETIME_SUB(current_datetime(), INTERVAL 780 MINUTE) 
 """
 
 def build_text(fake_user, target_user, victim_user, lang='es'):
@@ -151,6 +133,9 @@ def main():
             if tweet['id'] in reported:
                 print('already reported')
                 continue
+            
+            if tweet['screen_name'] in WHITELIST:
+                continue
 
             tweet_id = tweet['id']
             fake_user = tweet['screen_name']
@@ -161,12 +146,12 @@ def main():
 
             # build text
             text = build_text(fake_user, target_user, victim_user, lang)
-
-            # send alert
-            status = send_alert(tweet_id, text)
-            print(f'Alert sent: {text}')
-            time.sleep(60)
-            reported.append(tweet['id'])
-            
-        
+            if text is not None:
+                # send alert
+                status = send_alert(tweet_id, text)
+                print(f'Alert sent: {text}')
+                time.sleep(60)
+                reported.append(tweet['id'])
+                
+        time.sleep(60)
 main()
