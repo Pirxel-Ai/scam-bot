@@ -8,8 +8,14 @@ import numpy as np
 import time
 from src.utils import read_config
 from src.fetch_data import query_datasets
+from flask import Flask
+import os
 
-config = read_config('../settings/config.ini')
+
+config = read_config('settings/config.ini')
+
+app = Flask(__name__)
+
 
 # Authenticate to Twitter
 bearer_token = config['PirxBot']['BEARER_TOKEN']
@@ -131,9 +137,9 @@ def tweets_intra_similarity(list_tweets):
     return np.mean([similar(*subset) for subset in all_pairs(list_tweets)])
 
 
-def main():
-    
-    while True:
+@app.route("/")
+def stream_and_insert():
+  while True:
 
         rows = [dict(x) for x in query_datasets(QUERY)]
 
@@ -168,5 +174,6 @@ def main():
             time.sleep(60)
             reported.append(tweet['id'])
             
-        
-main()
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))

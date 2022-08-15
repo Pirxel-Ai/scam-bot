@@ -176,4 +176,3 @@ youtube-dl==2021.6.6
 yt-dlp==2021.12.1
 #zipp==3.6.0
 zipp
-public_metrics referenced_tweets withheld geo withheld context_annotations entities
