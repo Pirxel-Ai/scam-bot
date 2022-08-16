@@ -9,14 +9,19 @@ import time
 from src.utils import read_config
 from src.fetch_data import query_datasets
 
+from flask import Flask
+import os
+
+app = Flask(__name__)
+
 config = read_config('settings/config.ini')
 
 # Authenticate to Twitter
-bearer_token = config['FirstBotProd']['BEARER_TOKEN']
-consumer_key = config['FirstBotProd']['API_KEY']
-consumer_secret_key = config['FirstBotProd']['API_SECRET']
-access_token = config['FirstBotProd']['ACCES_TOKEN']
-access_token_secret = config['FirstBotProd']['ACCES_TOKEN_SECRET']
+bearer_token = config['PirxBot']['BEARER_TOKEN']
+consumer_key = config['PirxBot']['API_KEY']
+consumer_secret_key = config['PirxBot']['API_SECRET']
+access_token = config['PirxBot']['ACCES_TOKEN']
+access_token_secret = config['PirxBot']['ACCES_TOKEN_SECRET']
 
 
 auth = tweepy.OAuthHandler(consumer_key, consumer_secret_key)
@@ -40,7 +45,12 @@ WHITELIST = ['MercadoPagoMex',
             'KotakCares',
             'FrontierCare',
             'sterlinghelp',
-            'bobcreditcard']
+            'bobcreditcard',
+            'RossFeinstein',
+            'Renfe_SNCF',
+            'Renfe_SNCF_Fr',
+            'Renfe_SNCF_Es'
+            ]
 
 QUERY = """
         SELECT tweets.*, 
@@ -66,7 +76,7 @@ QUERY = """
         on tweets.author_id = candidates.id_str
         where candidates.id_str is not null
         and candidates.screen_name != candidates.target
-        and tweets.created_at > DATETIME_SUB(current_datetime(), INTERVAL 780 MINUTE) 
+        and tweets.created_at > DATETIME_SUB(current_datetime(), INTERVAL 720 MINUTE) 
 """
 
 def build_text(fake_user, target_user, victim_user, lang='es'):
@@ -75,9 +85,9 @@ def build_text(fake_user, target_user, victim_user, lang='es'):
     else:
         victim_user=victim_user[0]
     if lang == 'en':
-        text = f':warning: @{victim_user}: Beware of @{fake_user}! It may be a fake user trying to impersonate on behalf of @{target_user}.'
+        text = f':warning: @{victim_user}: Beware of @ {fake_user}! It may be a fake user trying to impersonate on behalf of @ {target_user}.'
     elif lang == 'es':
-        text = f':warning: @{victim_user}: Ten cuidado con @{fake_user}! Pareciera ser un usuario falso que intenta hacerse pasar por @{target_user}.'
+        text = f':warning: @{victim_user}: Ten cuidado con @ {fake_user}! Pareciera ser un usuario falso que intenta hacerse pasar por @ {target_user}.'
     else:
         text = ''
     text = emoji.emojize(text)
@@ -112,46 +122,51 @@ def all_pairs(mainlist):
 def tweets_intra_similarity(list_tweets):
     return np.mean([similar(*subset) for subset in all_pairs(list_tweets)])
 
-
-def main():
+@app.route("/")
+def stream_and_insert():
     
-    while True:
+    seen = Set()
+    rows = [dict(x) for x in query_datasets(QUERY)]
+    own_tweets = []
+    
+    for status in tweepy.Cursor(api.user_timeline).items():
+        own_tweets.append(status)
 
-        rows = [dict(x) for x in query_datasets(QUERY)]
+    reported = [x._json['id_str'] for x in own_tweets]
+    print(f'Alerted so far {len(reported)} victims')
 
-        own_tweets = []
+
+    for tweet in rows:
+
+        if tweet['id'] in reported:
+            print('tweet already reported')
+            continue
         
-        for status in tweepy.Cursor(api.user_timeline).items():
-            own_tweets.append(status)
+        if twee['id'] in seen:
+            print('tweet seen')
+            continue
+        
+        if tweet['screen_name'] in WHITELIST:
+            continue
 
-        reported = [x._json['id_str'] for x in own_tweets]
-        print(f'Alerted so far {len(reported)} victims')
+        tweet_id = tweet['id']
+        fake_user = tweet['screen_name']
+        target_user = tweet['target']
+        mentions= [x['username'] for x in tweet['entities']['mentions']]
+        victim_user = [user for user in mentions if user not in [fake_user, target_user]]
+        lang = tweet['lang']
 
-
-        for tweet in rows:
-
-            if tweet['id'] in reported:
-                print('already reported')
-                continue
-            
-            if tweet['screen_name'] in WHITELIST:
-                continue
-
-            tweet_id = tweet['id']
-            fake_user = tweet['screen_name']
-            target_user = tweet['target']
-            mentions= [x['username'] for x in tweet['entities']['mentions']]
-            victim_user = [user for user in mentions if user not in [fake_user, target_user]]
-            lang = tweet['lang']
-
-            # build text
-            text = build_text(fake_user, target_user, victim_user, lang)
-            if text is not None:
-                # send alert
-                status = send_alert(tweet_id, text)
-                print(f'Alert sent: {text}')
-                time.sleep(60)
-                reported.append(tweet['id'])
+        # build text
+        text = build_text(fake_user, target_user, victim_user, lang)
+        if text is not None:
+            # send alert
+            status = send_alert(tweet_id, text)
+            print(f'Alert sent: {text}')
+            time.sleep(60)
+            reported.append(tweet['id'])
                 
-        time.sleep(60)
-main()
+
+    return 'OK'
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))

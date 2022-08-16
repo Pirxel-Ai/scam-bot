@@ -1,0 +1,18 @@
+steps:
+# Build the container image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'gcr.io/deeplogo/scammersupdate', '.']
+# Push the container image to Container Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/deeplogo/scammersupdate']
+# Deploy container image to Cloud Run
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args: ['run', 'deploy', 'scammersupdate', 
+        '--image', 'gcr.io/deeplogo/scammersupdate', 
+        '--region', 'us-east1', 
+        '--cpu', '4',
+        '--memory', '16Gi']
+images:
+- gcr.io/deeplogo/scammersupdate
+timeout: '3600s'
